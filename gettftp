@@ -1,0 +1,146 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <time.h>
+#include <math.h>
+#include <unistd.h>
+#include <string.h>
+#include <sys/wait.h>
+#include <sys/types.h>
+#include <fcntl.h>
+#include <errno.h>
+#include <sys/socket.h>
+#include <netdb.h>
+#include <arpa/inet.h>
+
+#define PORT "1069" //Port ouvert sur le serveur
+
+
+                 // Fonction qui indique que la commande saisie n'est pas correcte
+                           void CommandeInvalide() {
+                    printf("Commande invalide \n");
+                     printf("Veuillez utiliser la commande de la façon suivante :\n");
+                   printf("./client gettftp hostname filename\n");
+                    printf("./client puttftp hostname filename\n");
+                    printf("./client gettftp hostname filename -blocksize valeur\n");
+                       printf("./client puttftp hostname filename -blocksize valeur\n");
+                exit(EXIT_FAILURE);
+            }
+
+
+                                              // Fonction retournant le message d'erreur que le serveur à envoyé
+                                 void AffichageErreur(char *buf){
+                                              printf("Client : Le serveur a retourné un message d'erreur suivant : ");
+                           if (*(buf+3)==0) {
+                        printf("Not defined, see error message (if any).\n");}
+                          else if (*(buf+3)==1) {
+                             printf("File not found.\n");}
+                            else if (*(buf+3)==2) {
+                      printf("Access violation.\n");}
+                        else if (*(buf+3)==3) {
+                           printf("Disk full or allocation exceeded.\n");}
+                             else if (*(buf+3)==4) {
+                        printf("Illegal TFTP operation.\n");}
+                            else if (*(buf+3)==5) {
+                       printf("Unknown transfer ID.\n");}
+                           else if (*(buf+3)==6) {
+                              printf("File already exists.\n");}
+                              else if (*(buf+3)==7) {
+                                printf("No such user.\n");}
+                         exit(EXIT_FAILURE);
+                            }
+
+                         int main(int argc, char* argv[]){
+                  // Les variables
+                         struct addrinfo hints;
+                       struct addrinfo *infoserveur;
+                    struct addrinfo *cur;
+                               int so;
+                      socklen_t slen;
+                           int sockfd;
+                     int longueurmessage;
+                               char *buf;
+                          struct sockaddr_in addr;
+                            char *blocksize;
+                                     int valeurblocksize=512; // Valeur par défaut du blocksize
+                                       int MAXDATA = 512; //Taille maximale d'un packet (par défaut)
+                                    char *mode = "octet"; // Mode de transfert : défini sur octet mais on aurait pu 
+                                       //utiliser netascii ou mail
+                                        int taillefichier = 0;
+
+                                              // Vérification du nombre d'arguments
+                                  if(argc != 4 && argc != 6){
+                        CommandeInvalide();
+                          }
+
+
+                           // Récupération des arguments
+                           char *serveur = argv[2];// adresse IP du serveur
+                            char *fichier = argv[3]; // nom du fichier
+                             if (argc==6) {
+                              valeurblocksize = (int) atoi(argv[5]); // Valeur du blocksize en int
+                                      blocksize = argv[5]; // Valeur du blocksize en asciiMAXDATA=valeurblocksize;
+                                   }
+
+
+                       // Configuration du client UDP
+                        memset(&hints,0,sizeof(hints));
+            hints.ai_family = AF_INET; // Pour le protocole internet IPV4
+              hints.ai_socktype = SOCK_DGRAM; // Mode datagramme
+  
+          if((so = getaddrinfo(serveur, PORT, &hints, &infoserveur)) != 0) {
+                     perror("Client : Erreur 'Getaddrinfo' \n");
+                   exit(EXIT_FAILURE);
+                 }
+ 
+               // Réservation d'un socket
+                    for(cur = infoserveur; cur != NULL; cur = cur->ai_next) {
+                 if ((sockfd = socket(cur->ai_family, cur->ai_socktype, cur->ai_protocol)) ==
+                       -1){
+                           perror("Client : Erreur 'socket' \n");
+                              continue;
+                      }
+                      break;
+                        }
+                     if(cur == NULL){
+                    fprintf(stderr, "Client : Impossible de réserver un socket \n");
+                         exit(EXIT_FAILURE);
+                           }
+           //QST 4
+              // Code pour gettftp
+            if(strcmp(argv[1],"gettftp")==0){
+              //======== Construction d'une requête en lecture RRQ et envoi au serveur ========
+                 //Construction d'une requête en lecture RRQ
+                       char *RRQ;
+                  int len=strlen(fichier)+strlen(mode)+4;
+                          if (argc==6) {
+                      // Si l'option blocksize est utilisée:
+                     if(strcmp(argv[4],"-blocksize")==0) {
+ 
+                  len=strlen(fichier)+strlen(mode)+4+2+strlen("blksize")+strlen(blocksiz
+                        e);
+                      } else {
+                           CommandeInvalide();
+ 
+                        }
+                          }
+                        RRQ = malloc(len);
+                         RRQ[0]=0;RRQ[1]=1; //OPcode
+                             strcpy(RRQ+2,fichier);
+                         RRQ[2+strlen(fichier)]=0;
+                      strcpy(RRQ+3+strlen(fichier),mode);
+                RRQ[3+strlen(fichier)+strlen(mode)]=0;
+                if (argc==6) {
+                  
+                // Si l'option blocksize est utilisée:
+                    if(strcmp(argv[4],"-blocksize")==0) {
+                      strcpy(RRQ+4+strlen(fichier)+strlen(mode),"blksize");
+                   RRQ[4+strlen(fichier)+strlen(mode)+strlen("blksize")]=0;
+ 
+                          strcpy(RRQ+5+strlen(fichier)+strlen(mode)+strlen("blksize"),blocksize);
+ 
+                          RRQ[5+strlen(fichier)+strlen(mode)+strlen("blksize")+strlen(blocksize)
+                             ]=0;
+                        }
+            }
+
+

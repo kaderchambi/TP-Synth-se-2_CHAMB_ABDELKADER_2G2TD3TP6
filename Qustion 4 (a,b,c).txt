@@ -1,0 +1,71 @@
+
+// le code utliser dans la seance de TP// 
+
+QST 4
+ // Code pour gettftp
+ if(strcmp(argv[1],"gettftp")==0){
+ //======== Construction d'une requête en lecture RRQ et envoi au serveur ========
+ //Construction d'une requête en lecture RRQ
+ char *RRQ;
+ int len=strlen(fichier)+strlen(mode)+4;
+ if (argc==6) {
+ // Si l'option blocksize est utilisée:
+ if(strcmp(argv[4],"-blocksize")==0) {
+ 
+len=strlen(fichier)+strlen(mode)+4+2+strlen("blksize")+strlen(blocksiz
+e);
+ } else {
+ CommandeInvalide();
+ }
+ }
+ RRQ = malloc(len);
+ RRQ[0]=0;RRQ[1]=1; //OPcode
+ strcpy(RRQ+2,fichier);
+ RRQ[2+strlen(fichier)]=0;
+ strcpy(RRQ+3+strlen(fichier),mode);
+ RRQ[3+strlen(fichier)+strlen(mode)]=0;
+ if (argc==6) {
+ // Si l'option blocksize est utilisée:
+ if(strcmp(argv[4],"-blocksize")==0) {
+ strcpy(RRQ+4+strlen(fichier)+strlen(mode),"blksize");
+ RRQ[4+strlen(fichier)+strlen(mode)+strlen("blksize")]=0;
+ 
+strcpy(RRQ+5+strlen(fichier)+strlen(mode)+strlen("blksize"),blocksize)
+;
+ 
+RRQ[5+strlen(fichier)+strlen(mode)+strlen("blksize")+strlen(blocksize)
+]=0;
+ }
+ }
+
+
+ //Envoi de la requête en lecture RRQ au serveur
+ if((longueurmessage=sendto(sockfd,RRQ,len,0,(struct sockaddr *)
+cur->ai_addr,cur->ai_addrlen))== -1){
+ perror("Client : Erreur 'sendto RRQ' \n");
+ exit(EXIT_FAILURE);
+ }
+ printf("Client: RRQ de : %d octets envoyé au serveur\n", longueurmessage);
+ 
+ //======== Reception d'un fichier ========
+ int datarecu;
+ FILE *fichiertelecharge = fopen(fichier,"wb"); //Création d'un fichier
+ do{
+ buf=malloc(MAXDATA+4);
+ if ((longueurmessage = recvfrom(sockfd, buf, MAXDATA+4 , 0,(struct
+sockaddr *) &addr, &slen))==-1) {
+ perror("Client : Erreur 'recevfrom' \n");
+ exit(EXIT_FAILURE);}
+ if(*(buf+1)==5) {
+ AffichageErreur(buf);}
+ 
+ buf[longueurmessage]='\0';
+ 
+ //Ecriture du fichier téléchargé
+ if(*(buf+1)!=6) {
+ printf("Client: Réception du paquet n° %d de : %d octets 
+\n",*(buf+3),longueurmessage-4);
+ datarecu=longueurmessage-4;
+ fwrite(buf+4,sizeof(char),datarecu,fichiertelecharge);
+ }
+ 
